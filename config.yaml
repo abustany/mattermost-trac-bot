@@ -1,0 +1,73 @@
+---
+# This is the reference configuration file for the Mattermost Trac Bot
+
+# HTTP(S) URL of the Mattermost server, port is optional
+server: "http://my.mattermost.server:80"
+
+# Username of the bot on the Mattermost server
+username: "testbot"
+
+# Password of the bot on the Mattermost server
+password: "testpass42"
+
+# Team that the bot should join. This should be the team identifier (ie. what
+# appears in the URL bar), not its human readable name.
+team: "test-team"
+
+# Template to use when printing information about a ticket. This is using
+# standard Go text/templates, see https://golang.org/pkg/text/template/ for a
+# reference.
+#
+# To see which fields are present on a ticket for your Trac instance, go to a
+# ticket and download it as "Comma delimited text" using the link at the bottom
+# of the page. The first line will list all the fields.
+#
+# The special field _url will always be present, and be the URL of the ticket.
+#
+# You can use Mattermost markdown formatting here.
+ticket_template: "[Ticket {{.id}} (*{{.type}}*, *{{.status}}*) — {{.summary}}]({{._url}})"
+
+# This dictionary defines the Trac instances to query. IDs are case insensitive.
+tracs:
+  trac1:
+    # HTTP(S) URL of the Trac server
+    url: "https://trac.domain1.com/path1"
+
+    # Username to use when querying tickets
+    username: "trac_user_1"
+
+    # Password for the username above
+    password: "trac_pass_1"
+
+    # Authentication type for this Trac server. It can be either:
+    # - basic: Use HTTP Basic Authentication
+    # - form:  Use the standard login form of Trac
+    auth_type: "basic"
+
+    # Whether to accept HTTPS certificate from unknown authorities
+    insecure: false
+
+  trac2:
+    url: "https://trac.domain2.com/path2"
+    username: "trac_user_2"
+    password: "trac_pass_2"
+    auth_type: "form"
+    insecure: true
+
+# This dictionary configures the channels on which the bot will be active.
+channels:
+  "Public channel":
+    # List of Trac instances that this channel is allowed to query. Those must
+    # be defined in the "tracs" dictionary above.
+    trac_instances: ["trac1"]
+
+    # If a numeric ID is specified without an explicit Trac ID (for example,
+    # #15 instead of trac1#15), fall back to this one.
+    #
+    # This setting is optional
+    default_trac_instance: "trac1"
+
+  "Super channel":
+    # This channel can query both trac1 and trac2, but has no default ID: ticket
+    # numbers without an explicit trac ID will trigger error messages.
+    trac_instances: ["trac1", "trac2"]
