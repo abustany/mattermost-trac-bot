@@ -13,8 +13,8 @@ import (
 	"github.com/mattermost/platform/model"
 	"github.com/pkg/errors"
 
-	"mattermost-trac-bot/config"
-	"mattermost-trac-bot/trac"
+	"github.com/abustany/mattermost-trac-bot/config"
+	"github.com/abustany/mattermost-trac-bot/trac"
 )
 
 type Bot struct {

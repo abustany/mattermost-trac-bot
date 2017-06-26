@@ -6,8 +6,8 @@ import (
 	"os"
 	"os/signal"
 
-	"mattermost-trac-bot/bot"
-	"mattermost-trac-bot/config"
+	"github.com/abustany/mattermost-trac-bot/bot"
+	"github.com/abustany/mattermost-trac-bot/config"
 )
 
 func main() {
