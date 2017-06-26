@@ -27,7 +27,7 @@ Until there are binary releases, you need the Go toolchain to get and compile
 the binary:
 
 ```
-GOPATH=$(pwd) go get github.com/abustany/mattermost-trac-bot
+GOPATH=$(pwd) go get -u github.com/abustany/mattermost-trac-bot
 ```
 
 If everything went well, you should have a `mattermost-trac-bot` binary in the
