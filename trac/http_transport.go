@@ -20,6 +20,16 @@ func logHeader(headers http.Header) {
 	}
 }
 
+func cutIfTooLong(s string) string {
+	const TOO_LONG = 1024
+
+	if len(s) > TOO_LONG {
+		return s[0:TOO_LONG] + "..."
+	} else {
+		return s
+	}
+}
+
 func (t *HTTPTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if !t.Log {
 		return t.Transport.RoundTrip(req)
@@ -43,7 +53,7 @@ func (t *HTTPTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	logHeader(req.Header)
 
 	if req.Body != nil {
-		log.Printf("%s", string(reqBody))
+		log.Printf("%s", cutIfTooLong(string(reqBody)))
 	}
 
 	res, err := http.DefaultTransport.RoundTrip(req)
@@ -64,7 +74,7 @@ func (t *HTTPTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	log.Printf("<--- HTTP")
 	log.Printf("%s", res.Status)
 	logHeader(res.Header)
-	log.Printf("%s", string(resBody))
+	log.Printf("%s", cutIfTooLong(string(resBody)))
 
 	return res, err
 }
