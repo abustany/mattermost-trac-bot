@@ -12,7 +12,10 @@ import (
 
 func main() {
 	var configFile string
+	var debug bool
+
 	flag.StringVar(&configFile, "config", "", "Configuration file")
+	flag.BoolVar(&debug, "debug", false, "Enable extra debugging logs")
 
 	flag.Parse()
 
@@ -31,7 +34,7 @@ func main() {
 
 	signal.Notify(sigCh, os.Interrupt)
 
-	bot, err := bot.New(conf)
+	bot, err := bot.New(conf, debug)
 
 	if err != nil {
 		log.Fatalf("Error while starting client: %s", err)

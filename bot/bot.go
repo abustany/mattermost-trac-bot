@@ -41,7 +41,7 @@ type Bot struct {
 
 var TICKET_RE = regexp.MustCompile(`([a-zA-Z0-9]+)?#(\d+)`)
 
-func New(conf config.Config) (*Bot, error) {
+func New(conf config.Config, debug bool) (*Bot, error) {
 	tracs := map[string]*trac.Client{}
 
 	ticketTemplate, err := template.New("ticket").Parse(conf.TicketTemplate)
@@ -65,7 +65,7 @@ func New(conf config.Config) (*Bot, error) {
 
 		log.Printf("Setting up Trac client %s with auth %s", name, config.AuthType)
 
-		client, err := trac.NewClient(config.URL, authType)
+		client, err := trac.NewClient(config.URL, authType, debug)
 
 		if err != nil {
 			return nil, errors.Wrap(err, "Error while initializing Trac client")

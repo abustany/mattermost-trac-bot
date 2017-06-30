@@ -48,31 +48,30 @@ func ParseAuthType(s string) (AuthType, error) {
 	}
 }
 
-func NewClient(url string, authType AuthType) (*Client, error) {
+func NewClient(url string, authType AuthType, debug bool) (*Client, error) {
 	jar, err := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
 
 	if err != nil {
 		return nil, errors.Wrap(err, "Error while initializing public suffix list")
 	}
 
+	transport := &HTTPTransport{
+		Log: debug,
+	}
+
 	return &Client{
 		url:      url,
 		authType: authType,
 		client: &http.Client{
-			Timeout: 10 * time.Second,
-			Jar:     jar,
+			Timeout:   10 * time.Second,
+			Jar:       jar,
+			Transport: transport,
 		},
 	}, nil
 }
 
 func (c *Client) SetInsecure(insecure bool) {
-	if insecure {
-		c.client.Transport = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
-	} else {
-		c.client.Transport = nil
-	}
+	c.client.Transport.(*HTTPTransport).TLSClientConfig = &tls.Config{InsecureSkipVerify: insecure}
 }
 
 func (c *Client) authenticateBasic(username, password string) error {
