@@ -96,7 +96,7 @@ func (c *Client) authenticateBasic(username, password string) error {
 		return nil
 	}
 
-	if resp.StatusCode == http.StatusUnauthorized {
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 		return errors.New("Invalid username or password")
 	}
 
@@ -155,7 +155,7 @@ func (c *Client) authenticateForm(username, password string) error {
 		return nil
 	}
 
-	if resp.StatusCode == http.StatusUnauthorized {
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 		return errors.New("Invalid username or password")
 	}
 
