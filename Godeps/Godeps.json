@@ -1,5 +1,5 @@
 {
-	"ImportPath": "mattermost-trac-bot",
+	"ImportPath": "github.com/abustany/mattermost-trac-bot",
 	"GoVersion": "go1.8",
 	"GodepVersion": "v79",
 	"Packages": [
@@ -17,8 +17,8 @@
 		},
 		{
 			"ImportPath": "github.com/mattermost/platform/model",
-			"Comment": "v3.8.0-369-ga42943082",
-			"Rev": "a42943082336155a5d7f14c11b01003ddf4af58d"
+			"Comment": "v3.8.0-438-g31aeda363",
+			"Rev": "31aeda363cc7529c2fe93439d6b2ae67d4c2af29"
 		},
 		{
 			"ImportPath": "github.com/nicksnyder/go-i18n/i18n",

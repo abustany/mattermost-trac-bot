@@ -230,6 +230,10 @@ func (c *Client4) GetBrandRoute() string {
 	return fmt.Sprintf("/brand")
 }
 
+func (c *Client4) GetElasticsearchRoute() string {
+	return fmt.Sprintf("/elasticsearch")
+}
+
 func (c *Client4) GetCommandsRoute() string {
 	return fmt.Sprintf("/commands")
 }
@@ -1102,9 +1106,20 @@ func (c *Client4) GetTeamMembersByIds(teamId string, userIds []string) ([]*TeamM
 }
 
 // AddTeamMember adds user to a team and return a team member.
-func (c *Client4) AddTeamMember(teamId, userId, hash, dataToHash, inviteId string) (*TeamMember, *Response) {
+func (c *Client4) AddTeamMember(teamId, userId string) (*TeamMember, *Response) {
 	member := &TeamMember{TeamId: teamId, UserId: userId}
 
+	if r, err := c.DoApiPost(c.GetTeamMembersRoute(teamId), member.ToJson()); err != nil {
+		return nil, BuildErrorResponse(r, err)
+	} else {
+		defer closeBody(r)
+		return TeamMemberFromJson(r.Body), BuildResponse(r)
+	}
+}
+
+// AddTeamMemberFromInvite adds a user to a team and return a team member using an invite id
+// or an invite hash/data pair.
+func (c *Client4) AddTeamMemberFromInvite(hash, dataToHash, inviteId string) (*TeamMember, *Response) {
 	var query string
 
 	if inviteId != "" {
@@ -1115,7 +1130,7 @@ func (c *Client4) AddTeamMember(teamId, userId, hash, dataToHash, inviteId strin
 		query += fmt.Sprintf("?hash=%v&data=%v", hash, dataToHash)
 	}
 
-	if r, err := c.DoApiPost(c.GetTeamMembersRoute(teamId)+query, member.ToJson()); err != nil {
+	if r, err := c.DoApiPost(c.GetTeamsRoute()+"/members/invite"+query, ""); err != nil {
 		return nil, BuildErrorResponse(r, err)
 	} else {
 		defer closeBody(r)
@@ -1123,7 +1138,7 @@ func (c *Client4) AddTeamMember(teamId, userId, hash, dataToHash, inviteId strin
 	}
 }
 
-// AddTeamMember adds a number of users to a team and returns the team members.
+// AddTeamMembers adds a number of users to a team and returns the team members.
 func (c *Client4) AddTeamMembers(teamId string, userIds []string) ([]*TeamMember, *Response) {
 	var members []*TeamMember
 	for _, userId := range userIds {
@@ -1673,8 +1688,8 @@ func (c *Client4) GetPostsBefore(channelId, postId string, page, perPage int, et
 
 // SearchPosts returns any posts with matching terms string.
 func (c *Client4) SearchPosts(teamId string, terms string, isOrSearch bool) (*PostList, *Response) {
-	requestBody := map[string]string{"terms": terms, "is_or_search": strconv.FormatBool(isOrSearch)}
-	if r, err := c.DoApiPost(c.GetTeamRoute(teamId)+"/posts/search", MapToJson(requestBody)); err != nil {
+	requestBody := map[string]interface{}{"terms": terms, "is_or_search": isOrSearch}
+	if r, err := c.DoApiPost(c.GetTeamRoute(teamId)+"/posts/search", StringInterfaceToJson(requestBody)); err != nil {
 		return nil, BuildErrorResponse(r, err)
 	} else {
 		defer closeBody(r)
@@ -2496,6 +2511,19 @@ func (c *Client4) AuthorizeOAuthApp(authRequest *AuthorizeRequest) (string, *Res
 func (c *Client4) DeauthorizeOAuthApp(appId string) (bool, *Response) {
 	requestData := map[string]string{"client_id": appId}
 	if r, err := c.DoApiRequest(http.MethodPost, c.Url+"/oauth/deauthorize", MapToJson(requestData), ""); err != nil {
+		return false, BuildErrorResponse(r, err)
+	} else {
+		defer closeBody(r)
+		return CheckStatusOK(r), BuildResponse(r)
+	}
+}
+
+// Elasticsearch Section
+
+// TestElasticsearch will attempt to connect to the configured Elasticsearch server and return OK if configured
+// correctly.
+func (c *Client4) TestElasticsearch() (bool, *Response) {
+	if r, err := c.DoApiPost(c.GetElasticsearchRoute()+"/test", ""); err != nil {
 		return false, BuildErrorResponse(r, err)
 	} else {
 		defer closeBody(r)

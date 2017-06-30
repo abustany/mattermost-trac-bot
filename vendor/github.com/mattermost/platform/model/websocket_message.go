@@ -36,6 +36,8 @@ const (
 	WEBSOCKET_EVENT_REACTION_ADDED      = "reaction_added"
 	WEBSOCKET_EVENT_REACTION_REMOVED    = "reaction_removed"
 	WEBSOCKET_EVENT_RESPONSE            = "response"
+	WEBSOCKET_EVENT_EMOJI_ADDED         = "emoji_added"
+	WEBSOCKET_EVENT_CHANNEL_VIEWED      = "channel_viewed"
 )
 
 type WebSocketMessage interface {

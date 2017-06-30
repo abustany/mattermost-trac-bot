@@ -39,6 +39,10 @@ const (
 	DIRECT_MESSAGE_ANY  = "any"
 	DIRECT_MESSAGE_TEAM = "team"
 
+	SHOW_USERNAME          = "username"
+	SHOW_NICKNAME_FULLNAME = "nickname_full_name"
+	SHOW_FULLNAME          = "full_name"
+
 	PERMISSIONS_ALL           = "all"
 	PERMISSIONS_CHANNEL_ADMIN = "channel_admin"
 	PERMISSIONS_TEAM_ADMIN    = "team_admin"
@@ -158,6 +162,7 @@ type ServiceSettings struct {
 	TimeBetweenUserTypingUpdatesMilliseconds *int64
 	EnablePostSearch                         *bool
 	EnableUserTypingMessages                 *bool
+	EnablChannelViewedMessages               *bool
 	EnableUserStatuses                       *bool
 	ClusterLogTimeoutMilliseconds            *int
 }
@@ -231,12 +236,6 @@ type FileSettings struct {
 	Directory               string
 	EnablePublicLink        bool
 	PublicLinkSalt          *string
-	ThumbnailWidth          int
-	ThumbnailHeight         int
-	PreviewWidth            int
-	PreviewHeight           int
-	ProfileWidth            int
-	ProfileHeight           int
 	InitialFont             string
 	AmazonS3AccessKeyId     string
 	AmazonS3SecretAccessKey string
@@ -327,6 +326,7 @@ type TeamSettings struct {
 	UserStatusAwayTimeout               *int64
 	MaxChannelsPerTeam                  *int64
 	MaxNotificationsPerChannel          *int64
+	TeammateNameDisplay                 *string
 }
 
 type LdapSettings struct {
@@ -705,6 +705,11 @@ func (o *Config) SetDefaults() {
 	if o.TeamSettings.MaxNotificationsPerChannel == nil {
 		o.TeamSettings.MaxNotificationsPerChannel = new(int64)
 		*o.TeamSettings.MaxNotificationsPerChannel = 1000
+	}
+
+	if o.TeamSettings.TeammateNameDisplay == nil {
+		o.TeamSettings.TeammateNameDisplay = new(string)
+		*o.TeamSettings.TeammateNameDisplay = SHOW_FULLNAME
 	}
 
 	if o.EmailSettings.EnableSignInWithEmail == nil {
@@ -1306,6 +1311,11 @@ func (o *Config) SetDefaults() {
 		*o.ServiceSettings.EnableUserTypingMessages = true
 	}
 
+	if o.ServiceSettings.EnablChannelViewedMessages == nil {
+		o.ServiceSettings.EnablChannelViewedMessages = new(bool)
+		*o.ServiceSettings.EnablChannelViewedMessages = true
+	}
+
 	if o.ServiceSettings.EnableUserStatuses == nil {
 		o.ServiceSettings.EnableUserStatuses = new(bool)
 		*o.ServiceSettings.EnableUserStatuses = true
@@ -1394,6 +1404,10 @@ func (o *Config) IsValid() *AppError {
 		return NewLocAppError("Config.IsValid", "model.config.is_valid.restrict_direct_message.app_error", nil, "")
 	}
 
+	if !(*o.TeamSettings.TeammateNameDisplay == SHOW_FULLNAME || *o.TeamSettings.TeammateNameDisplay == SHOW_NICKNAME_FULLNAME || *o.TeamSettings.TeammateNameDisplay == SHOW_USERNAME) {
+		return NewLocAppError("Config.IsValid", "model.config.is_valid.teammate_name_display.app_error", nil, "")
+	}
+
 	if len(o.SqlSettings.AtRestEncryptKey) < 32 {
 		return NewLocAppError("Config.IsValid", "model.config.is_valid.encrypt_sql.app_error", nil, "")
 	}
@@ -1424,30 +1438,6 @@ func (o *Config) IsValid() *AppError {
 
 	if !(o.FileSettings.DriverName == IMAGE_DRIVER_LOCAL || o.FileSettings.DriverName == IMAGE_DRIVER_S3) {
 		return NewLocAppError("Config.IsValid", "model.config.is_valid.file_driver.app_error", nil, "")
-	}
-
-	if o.FileSettings.PreviewHeight < 0 {
-		return NewLocAppError("Config.IsValid", "model.config.is_valid.file_preview_height.app_error", nil, "")
-	}
-
-	if o.FileSettings.PreviewWidth <= 0 {
-		return NewLocAppError("Config.IsValid", "model.config.is_valid.file_preview_width.app_error", nil, "")
-	}
-
-	if o.FileSettings.ProfileHeight <= 0 {
-		return NewLocAppError("Config.IsValid", "model.config.is_valid.file_profile_height.app_error", nil, "")
-	}
-
-	if o.FileSettings.ProfileWidth <= 0 {
-		return NewLocAppError("Config.IsValid", "model.config.is_valid.file_profile_width.app_error", nil, "")
-	}
-
-	if o.FileSettings.ThumbnailHeight <= 0 {
-		return NewLocAppError("Config.IsValid", "model.config.is_valid.file_thumb_height.app_error", nil, "")
-	}
-
-	if o.FileSettings.ThumbnailWidth <= 0 {
-		return NewLocAppError("Config.IsValid", "model.config.is_valid.file_thumb_width.app_error", nil, "")
 	}
 
 	if len(*o.FileSettings.PublicLinkSalt) < 32 {
