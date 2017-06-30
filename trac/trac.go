@@ -66,8 +66,29 @@ func NewClient(url string, authType AuthType, debug bool) (*Client, error) {
 			Timeout:   10 * time.Second,
 			Jar:       jar,
 			Transport: transport,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				if jarHasAuthToken(jar, req.URL) {
+					return http.ErrUseLastResponse
+				}
+
+				if len(via) >= 10 {
+					return errors.New("Too many redirects")
+				}
+
+				return nil
+			},
 		},
 	}, nil
+}
+
+func jarHasAuthToken(jar *cookiejar.Jar, url *url.URL) bool {
+	for _, cookie := range jar.Cookies(url) {
+		if cookie.Name == "trac_auth" && len(cookie.Value) > 0 {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (c *Client) SetInsecure(insecure bool) {
@@ -150,15 +171,14 @@ func (c *Client) authenticateForm(username, password string) error {
 
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusFound {
+	switch resp.StatusCode {
+	case http.StatusOK, http.StatusFound, http.StatusSeeOther:
 		return nil
-	}
-
-	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+	case http.StatusUnauthorized, http.StatusForbidden:
 		return errors.New("Invalid username or password")
+	default:
+		return errors.Errorf("Unexpected HTTP status: %d", resp.StatusCode)
 	}
-
-	return errors.Errorf("Unexpected HTTP status: %d", resp.StatusCode)
 }
 
 func (c *Client) Authenticate(username, password string) error {
