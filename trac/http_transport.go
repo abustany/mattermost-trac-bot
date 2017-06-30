@@ -56,7 +56,7 @@ func (t *HTTPTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		log.Printf("%s", cutIfTooLong(string(reqBody)))
 	}
 
-	res, err := http.DefaultTransport.RoundTrip(req)
+	res, err := t.Transport.RoundTrip(req)
 
 	if err != nil {
 		return nil, err
