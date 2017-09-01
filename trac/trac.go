@@ -28,6 +28,8 @@ type Client struct {
 	url      string
 	authType AuthType
 	client   *http.Client
+	username string
+	password string
 }
 
 // Ticket in Trac can come in any shape, so our representation is just a map of
@@ -182,14 +184,35 @@ func (c *Client) authenticateForm(username, password string) error {
 }
 
 func (c *Client) Authenticate(username, password string) error {
+	var err error
+
 	switch c.authType {
 	case AuthBasic:
-		return c.authenticateBasic(username, password)
+		err = c.authenticateBasic(username, password)
 	case AuthForm:
-		return c.authenticateForm(username, password)
+		err = c.authenticateForm(username, password)
 	default:
 		panic("Unknown auth type")
 	}
+
+	if err == nil {
+		c.username = username
+		c.password = password
+	}
+
+	return err
+}
+
+func (c *Client) reauthenticate() error {
+	if c.username == "" {
+		return errors.New("Client was never authenticated")
+	}
+
+	if err := c.Authenticate(c.username, c.password); err != nil {
+		return errors.Wrap(err, "Error while re-authenticating")
+	}
+
+	return nil
 }
 
 func (c *Client) GetTicket(id string) (Ticket, error) {
@@ -205,6 +228,14 @@ func (c *Client) GetTicket(id string) (Ticket, error) {
 	}
 
 	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		if err := c.reauthenticate(); err != nil {
+			return Ticket{}, errors.Wrap(err, "Error while re-authenticating")
+		}
+
+		return c.GetTicket(id)
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		return Ticket{}, errors.Errorf("Unexpected HTTP status: %d", resp.StatusCode)
