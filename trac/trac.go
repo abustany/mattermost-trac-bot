@@ -27,7 +27,7 @@ const (
 type Client struct {
 	url      string
 	authType AuthType
-	client   *http.Client
+	client   HttpClient
 	username string
 	password string
 }
@@ -50,7 +50,7 @@ func ParseAuthType(s string) (AuthType, error) {
 	}
 }
 
-func NewClient(url string, authType AuthType, debug bool) (*Client, error) {
+func New(url string, authType AuthType, debug bool) (*Client, error) {
 	jar, err := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
 
 	if err != nil {
@@ -61,25 +61,32 @@ func NewClient(url string, authType AuthType, debug bool) (*Client, error) {
 		Log: debug,
 	}
 
+	client := &http.Client{
+		Timeout:   10 * time.Second,
+		Jar:       jar,
+		Transport: transport,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if jarHasAuthToken(jar, req.URL) {
+				return http.ErrUseLastResponse
+			}
+
+			if len(via) >= 10 {
+				return errors.New("Too many redirects")
+			}
+
+			return nil
+		},
+	}
+
+	return NewWithHttpClient(url, authType, debug, client)
+}
+
+func NewWithHttpClient(url string, authType AuthType, debug bool, client HttpClient) (*Client, error) {
+
 	return &Client{
 		url:      url,
 		authType: authType,
-		client: &http.Client{
-			Timeout:   10 * time.Second,
-			Jar:       jar,
-			Transport: transport,
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				if jarHasAuthToken(jar, req.URL) {
-					return http.ErrUseLastResponse
-				}
-
-				if len(via) >= 10 {
-					return errors.New("Too many redirects")
-				}
-
-				return nil
-			},
-		},
+		client:   client,
 	}, nil
 }
 
@@ -94,7 +101,9 @@ func jarHasAuthToken(jar *cookiejar.Jar, url *url.URL) bool {
 }
 
 func (c *Client) SetInsecure(insecure bool) {
-	c.client.Transport.(*HTTPTransport).TLSClientConfig = &tls.Config{InsecureSkipVerify: insecure}
+	if httpClient, ok := c.client.(*http.Client); ok {
+		httpClient.Transport.(*HTTPTransport).TLSClientConfig = &tls.Config{InsecureSkipVerify: insecure}
+	}
 }
 
 func (c *Client) authenticateBasic(username, password string) error {
@@ -128,7 +137,7 @@ func (c *Client) authenticateBasic(username, password string) error {
 var TOKEN_FORM_RE = regexp.MustCompile(`<input\s+type="hidden"\s+name="__FORM_TOKEN"\s+value="([a-z0-9]+)"\s+/>`)
 
 func (c *Client) getLoginFormToken() (string, error) {
-	resp, err := c.client.Get(c.url + "/login")
+	resp, err := httpGet(c.client, c.url+"/login")
 
 	if err != nil {
 		return "", errors.Wrap(err, "Error while retrieving login page")
@@ -160,7 +169,7 @@ func (c *Client) authenticateForm(username, password string) error {
 		return errors.Wrap(err, "Error while loading form token")
 	}
 
-	resp, err := c.client.PostForm(c.url+"/login", url.Values{
+	resp, err := httpPostForm(c.client, c.url+"/login", url.Values{
 		"user":         {username},
 		"password":     {password},
 		"referer":      {c.url},
@@ -221,7 +230,7 @@ func (c *Client) GetTicket(id string) (Ticket, error) {
 
 	log.Printf("GET %s", csvTicketUrl)
 
-	resp, err := c.client.Get(csvTicketUrl)
+	resp, err := httpGet(c.client, csvTicketUrl)
 
 	if err != nil {
 		return Ticket{}, errors.Wrap(err, "Error while sending ticket request")

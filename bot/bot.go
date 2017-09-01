@@ -65,7 +65,7 @@ func New(conf config.Config, debug bool) (*Bot, error) {
 
 		log.Printf("Setting up Trac client %s with auth %s", name, config.AuthType)
 
-		client, err := trac.NewClient(config.URL, authType, debug)
+		client, err := trac.New(config.URL, authType, debug)
 
 		if err != nil {
 			return nil, errors.Wrap(err, "Error while initializing Trac client")
