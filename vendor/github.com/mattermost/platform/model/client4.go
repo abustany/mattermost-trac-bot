@@ -21,6 +21,7 @@ type Response struct {
 	RequestId     string
 	Etag          string
 	ServerVersion string
+	Header        http.Header
 }
 
 type Client4 struct {
@@ -36,10 +37,20 @@ func NewAPIv4Client(url string) *Client4 {
 }
 
 func BuildErrorResponse(r *http.Response, err *AppError) *Response {
-	if r == nil {
-		return &Response{StatusCode: 0, Error: err}
+	var statusCode int
+	var header http.Header
+	if r != nil {
+		statusCode = r.StatusCode
+		header = r.Header
 	} else {
-		return &Response{StatusCode: r.StatusCode, Error: err}
+		statusCode = 0
+		header = make(http.Header, 0)
+	}
+
+	return &Response{
+		StatusCode: statusCode,
+		Error:      err,
+		Header:     header,
 	}
 }
 
@@ -49,6 +60,7 @@ func BuildResponse(r *http.Response) *Response {
 		RequestId:     r.Header.Get(HEADER_REQUEST_ID),
 		Etag:          r.Header.Get(HEADER_ETAG_SERVER),
 		ServerVersion: r.Header.Get(HEADER_VERSION_ID),
+		Header:        r.Header,
 	}
 }
 
@@ -68,6 +80,10 @@ func (c *Client4) GetUsersRoute() string {
 
 func (c *Client4) GetUserRoute(userId string) string {
 	return fmt.Sprintf(c.GetUsersRoute()+"/%v", userId)
+}
+
+func (c *Client4) GetUserAccessTokenRoute(tokenId string) string {
+	return fmt.Sprintf(c.GetUsersRoute()+"/tokens/%v", tokenId)
 }
 
 func (c *Client4) GetUserByUsernameRoute(userName string) string {
@@ -324,12 +340,15 @@ func (c *Client4) DoUploadFile(url string, data []byte, contentType string) (*Fi
 	}
 
 	if rp, err := c.HttpClient.Do(rq); err != nil || rp == nil {
-		return nil, &Response{Error: NewAppError(url, "model.client.connecting.app_error", nil, err.Error(), 0)}
-	} else if rp.StatusCode >= 300 {
-		return nil, &Response{StatusCode: rp.StatusCode, Error: AppErrorFromJson(rp.Body)}
+		return nil, BuildErrorResponse(rp, NewAppError(url, "model.client.connecting.app_error", nil, err.Error(), 0))
 	} else {
 		defer closeBody(rp)
-		return FileUploadResponseFromJson(rp.Body), BuildResponse(rp)
+
+		if rp.StatusCode >= 300 {
+			return nil, BuildErrorResponse(rp, AppErrorFromJson(rp.Body))
+		} else {
+			return FileUploadResponseFromJson(rp.Body), BuildResponse(rp)
+		}
 	}
 }
 
@@ -343,16 +362,19 @@ func (c *Client4) DoEmojiUploadFile(url string, data []byte, contentType string)
 	}
 
 	if rp, err := c.HttpClient.Do(rq); err != nil || rp == nil {
-		return nil, &Response{Error: NewAppError(url, "model.client.connecting.app_error", nil, err.Error(), 0)}
-	} else if rp.StatusCode >= 300 {
-		return nil, &Response{StatusCode: rp.StatusCode, Error: AppErrorFromJson(rp.Body)}
+		return nil, BuildErrorResponse(rp, NewAppError(url, "model.client.connecting.app_error", nil, err.Error(), 0))
 	} else {
 		defer closeBody(rp)
-		return EmojiFromJson(rp.Body), BuildResponse(rp)
+
+		if rp.StatusCode >= 300 {
+			return nil, BuildErrorResponse(rp, AppErrorFromJson(rp.Body))
+		} else {
+			return EmojiFromJson(rp.Body), BuildResponse(rp)
+		}
 	}
 }
 
-func (c *Client4) DoUploadImportTeam(url string, data []byte, contentType string) ([]byte, *Response) {
+func (c *Client4) DoUploadImportTeam(url string, data []byte, contentType string) (map[string]string, *Response) {
 	rq, _ := http.NewRequest("POST", c.ApiUrl+url, bytes.NewReader(data))
 	rq.Header.Set("Content-Type", contentType)
 	rq.Close = true
@@ -362,14 +384,15 @@ func (c *Client4) DoUploadImportTeam(url string, data []byte, contentType string
 	}
 
 	if rp, err := c.HttpClient.Do(rq); err != nil || rp == nil {
-		return nil, &Response{Error: NewAppError(url, "model.client.connecting.app_error", nil, err.Error(), 0)}
-	} else if rp.StatusCode >= 300 {
-		return nil, &Response{StatusCode: rp.StatusCode, Error: AppErrorFromJson(rp.Body)}
-	} else if data, err := ioutil.ReadAll(rp.Body); err != nil {
-		return nil, &Response{StatusCode: rp.StatusCode, Error: NewAppError("UploadImportTeam", "model.client.read_file.app_error", nil, err.Error(), rp.StatusCode)}
+		return nil, BuildErrorResponse(rp, NewAppError(url, "model.client.connecting.app_error", nil, err.Error(), 0))
 	} else {
 		defer closeBody(rp)
-		return data, BuildResponse(rp)
+
+		if rp.StatusCode >= 300 {
+			return nil, BuildErrorResponse(rp, AppErrorFromJson(rp.Body))
+		} else {
+			return MapFromJson(rp.Body), BuildResponse(rp)
+		}
 	}
 }
 
@@ -582,10 +605,14 @@ func (c *Client4) AutocompleteUsers(username string, etag string) (*UserAutocomp
 func (c *Client4) GetProfileImage(userId, etag string) ([]byte, *Response) {
 	if r, err := c.DoApiGet(c.GetUserRoute(userId)+"/image", etag); err != nil {
 		return nil, BuildErrorResponse(r, err)
-	} else if data, err := ioutil.ReadAll(r.Body); err != nil {
-		return nil, &Response{StatusCode: r.StatusCode, Error: NewAppError("GetProfileImage", "model.client.read_file.app_error", nil, err.Error(), r.StatusCode)}
 	} else {
-		return data, BuildResponse(r)
+		defer closeBody(r)
+
+		if data, err := ioutil.ReadAll(r.Body); err != nil {
+			return nil, BuildErrorResponse(r, NewAppError("GetProfileImage", "model.client.read_file.app_error", nil, err.Error(), r.StatusCode))
+		} else {
+			return data, BuildResponse(r)
+		}
 	}
 }
 
@@ -603,6 +630,28 @@ func (c *Client4) GetUsers(page int, perPage int, etag string) ([]*User, *Respon
 // GetUsersInTeam returns a page of users on a team. Page counting starts at 0.
 func (c *Client4) GetUsersInTeam(teamId string, page int, perPage int, etag string) ([]*User, *Response) {
 	query := fmt.Sprintf("?in_team=%v&page=%v&per_page=%v", teamId, page, perPage)
+	if r, err := c.DoApiGet(c.GetUsersRoute()+query, etag); err != nil {
+		return nil, BuildErrorResponse(r, err)
+	} else {
+		defer closeBody(r)
+		return UserListFromJson(r.Body), BuildResponse(r)
+	}
+}
+
+// GetNewUsersInTeam returns a page of users on a team. Page counting starts at 0.
+func (c *Client4) GetNewUsersInTeam(teamId string, page int, perPage int, etag string) ([]*User, *Response) {
+	query := fmt.Sprintf("?sort=create_at&in_team=%v&page=%v&per_page=%v", teamId, page, perPage)
+	if r, err := c.DoApiGet(c.GetUsersRoute()+query, etag); err != nil {
+		return nil, BuildErrorResponse(r, err)
+	} else {
+		defer closeBody(r)
+		return UserListFromJson(r.Body), BuildResponse(r)
+	}
+}
+
+// GetRecentlyActiveUsersInTeam returns a page of users on a team. Page counting starts at 0.
+func (c *Client4) GetRecentlyActiveUsersInTeam(teamId string, page int, perPage int, etag string) ([]*User, *Response) {
+	query := fmt.Sprintf("?sort=last_activity_at&in_team=%v&page=%v&per_page=%v", teamId, page, perPage)
 	if r, err := c.DoApiGet(c.GetUsersRoute()+query, etag); err != nil {
 		return nil, BuildErrorResponse(r, err)
 	} else {
@@ -929,11 +978,68 @@ func (c *Client4) SetProfileImage(userId string, data []byte) (bool, *Response) 
 	if rp, err := c.HttpClient.Do(rq); err != nil || rp == nil {
 		// set to http.StatusForbidden(403)
 		return false, &Response{StatusCode: http.StatusForbidden, Error: NewAppError(c.GetUserRoute(userId)+"/image", "model.client.connecting.app_error", nil, err.Error(), 403)}
-	} else if rp.StatusCode >= 300 {
-		return false, &Response{StatusCode: rp.StatusCode, Error: AppErrorFromJson(rp.Body)}
 	} else {
 		defer closeBody(rp)
-		return CheckStatusOK(rp), BuildResponse(rp)
+
+		if rp.StatusCode >= 300 {
+			return false, BuildErrorResponse(rp, AppErrorFromJson(rp.Body))
+		} else {
+			return CheckStatusOK(rp), BuildResponse(rp)
+		}
+	}
+}
+
+// CreateUserAccessToken will generate a user access token that can be used in place
+// of a session token to access the REST API. Must have the 'create_user_access_token'
+// permission and if generating for another user, must have the 'edit_other_users'
+// permission. A non-blank description is required.
+func (c *Client4) CreateUserAccessToken(userId, description string) (*UserAccessToken, *Response) {
+	requestBody := map[string]string{"description": description}
+	if r, err := c.DoApiPost(c.GetUserRoute(userId)+"/tokens", MapToJson(requestBody)); err != nil {
+		return nil, BuildErrorResponse(r, err)
+	} else {
+		defer closeBody(r)
+		return UserAccessTokenFromJson(r.Body), BuildResponse(r)
+	}
+}
+
+// GetUserAccessToken will get a user access token's id, description and the user_id
+// of the user it is for. The actual token will not be returned. Must have the
+// 'read_user_access_token' permission and if getting for another user, must have the
+// 'edit_other_users' permission.
+func (c *Client4) GetUserAccessToken(tokenId string) (*UserAccessToken, *Response) {
+	if r, err := c.DoApiGet(c.GetUserAccessTokenRoute(tokenId), ""); err != nil {
+		return nil, BuildErrorResponse(r, err)
+	} else {
+		defer closeBody(r)
+		return UserAccessTokenFromJson(r.Body), BuildResponse(r)
+	}
+}
+
+// GetUserAccessTokensForUser will get a paged list of user access tokens showing id,
+// description and user_id for each. The actual tokens will not be returned. Must have
+// the 'read_user_access_token' permission and if getting for another user, must have the
+// 'edit_other_users' permission.
+func (c *Client4) GetUserAccessTokensForUser(userId string, page, perPage int) ([]*UserAccessToken, *Response) {
+	query := fmt.Sprintf("?page=%v&per_page=%v", page, perPage)
+	if r, err := c.DoApiGet(c.GetUserRoute(userId)+"/tokens"+query, ""); err != nil {
+		return nil, BuildErrorResponse(r, err)
+	} else {
+		defer closeBody(r)
+		return UserAccessTokenListFromJson(r.Body), BuildResponse(r)
+	}
+}
+
+// RevokeUserAccessToken will revoke a user access token by id. Must have the
+// 'revoke_user_access_token' permission and if revoking for another user, must have the
+// 'edit_other_users' permission.
+func (c *Client4) RevokeUserAccessToken(tokenId string) (bool, *Response) {
+	requestBody := map[string]string{"token_id": tokenId}
+	if r, err := c.DoApiPost(c.GetUsersRoute()+"/tokens/revoke", MapToJson(requestBody)); err != nil {
+		return false, BuildErrorResponse(r, err)
+	} else {
+		defer closeBody(r)
+		return CheckStatusOK(r), BuildResponse(r)
 	}
 }
 
@@ -1188,7 +1294,7 @@ func (c *Client4) GetTeamUnread(teamId, userId string) (*TeamUnread, *Response) 
 }
 
 // ImportTeam will import an exported team from other app into a existing team.
-func (c *Client4) ImportTeam(data []byte, filesize int, importFrom, filename, teamId string) ([]byte, *Response) {
+func (c *Client4) ImportTeam(data []byte, filesize int, importFrom, filename, teamId string) (map[string]string, *Response) {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
@@ -1629,7 +1735,7 @@ func (c *Client4) GetFlaggedPostsForUserInTeam(userId string, teamId string, pag
 		return nil, &Response{StatusCode: http.StatusBadRequest, Error: NewAppError("GetFlaggedPostsForUserInTeam", "model.client.get_flagged_posts_in_team.missing_parameter.app_error", nil, "", http.StatusBadRequest)}
 	}
 
-	query := fmt.Sprintf("?in_team=%v&page=%v&per_page=%v", teamId, page, perPage)
+	query := fmt.Sprintf("?team_id=%v&page=%v&per_page=%v", teamId, page, perPage)
 	if r, err := c.DoApiGet(c.GetUserRoute(userId)+"/posts/flagged"+query, ""); err != nil {
 		return nil, BuildErrorResponse(r, err)
 	} else {
@@ -1644,7 +1750,7 @@ func (c *Client4) GetFlaggedPostsForUserInChannel(userId string, channelId strin
 		return nil, &Response{StatusCode: http.StatusBadRequest, Error: NewAppError("GetFlaggedPostsForUserInChannel", "model.client.get_flagged_posts_in_channel.missing_parameter.app_error", nil, "", http.StatusBadRequest)}
 	}
 
-	query := fmt.Sprintf("?in_channel=%v&page=%v&per_page=%v", channelId, page, perPage)
+	query := fmt.Sprintf("?channel_id=%v&page=%v&per_page=%v", channelId, page, perPage)
 	if r, err := c.DoApiGet(c.GetUserRoute(userId)+"/posts/flagged"+query, ""); err != nil {
 		return nil, BuildErrorResponse(r, err)
 	} else {
@@ -1697,6 +1803,16 @@ func (c *Client4) SearchPosts(teamId string, terms string, isOrSearch bool) (*Po
 	}
 }
 
+// DoPostAction performs a post action.
+func (c *Client4) DoPostAction(postId, actionId string) (bool, *Response) {
+	if r, err := c.DoApiPost(c.GetPostRoute(postId)+"/actions/"+actionId, ""); err != nil {
+		return false, BuildErrorResponse(r, err)
+	} else {
+		defer closeBody(r)
+		return CheckStatusOK(r), BuildResponse(r)
+	}
+}
+
 // File Section
 
 // UploadFile will upload a file to a channel, to be later attached to a post.
@@ -1727,10 +1843,29 @@ func (c *Client4) UploadFile(data []byte, channelId string, filename string) (*F
 func (c *Client4) GetFile(fileId string) ([]byte, *Response) {
 	if r, err := c.DoApiGet(c.GetFileRoute(fileId), ""); err != nil {
 		return nil, BuildErrorResponse(r, err)
-	} else if data, err := ioutil.ReadAll(r.Body); err != nil {
-		return nil, &Response{StatusCode: r.StatusCode, Error: NewAppError("GetFile", "model.client.read_file.app_error", nil, err.Error(), r.StatusCode)}
 	} else {
-		return data, BuildResponse(r)
+		defer closeBody(r)
+
+		if data, err := ioutil.ReadAll(r.Body); err != nil {
+			return nil, BuildErrorResponse(r, NewAppError("GetFile", "model.client.read_file.app_error", nil, err.Error(), r.StatusCode))
+		} else {
+			return data, BuildResponse(r)
+		}
+	}
+}
+
+// DownloadFile gets the bytes for a file by id, optionally adding headers to force the browser to download it
+func (c *Client4) DownloadFile(fileId string, download bool) ([]byte, *Response) {
+	if r, err := c.DoApiGet(c.GetFileRoute(fileId)+fmt.Sprintf("?download=%v", download), ""); err != nil {
+		return nil, BuildErrorResponse(r, err)
+	} else {
+		defer closeBody(r)
+
+		if data, err := ioutil.ReadAll(r.Body); err != nil {
+			return nil, BuildErrorResponse(r, NewAppError("DownloadFile", "model.client.read_file.app_error", nil, err.Error(), r.StatusCode))
+		} else {
+			return data, BuildResponse(r)
+		}
 	}
 }
 
@@ -1738,10 +1873,29 @@ func (c *Client4) GetFile(fileId string) ([]byte, *Response) {
 func (c *Client4) GetFileThumbnail(fileId string) ([]byte, *Response) {
 	if r, err := c.DoApiGet(c.GetFileRoute(fileId)+"/thumbnail", ""); err != nil {
 		return nil, BuildErrorResponse(r, err)
-	} else if data, err := ioutil.ReadAll(r.Body); err != nil {
-		return nil, &Response{StatusCode: r.StatusCode, Error: NewAppError("GetFileThumbnail", "model.client.read_file.app_error", nil, err.Error(), r.StatusCode)}
 	} else {
-		return data, BuildResponse(r)
+		defer closeBody(r)
+
+		if data, err := ioutil.ReadAll(r.Body); err != nil {
+			return nil, BuildErrorResponse(r, NewAppError("GetFileThumbnail", "model.client.read_file.app_error", nil, err.Error(), r.StatusCode))
+		} else {
+			return data, BuildResponse(r)
+		}
+	}
+}
+
+// DownloadFileThumbnail gets the bytes for a file by id, optionally adding headers to force the browser to download it.
+func (c *Client4) DownloadFileThumbnail(fileId string, download bool) ([]byte, *Response) {
+	if r, err := c.DoApiGet(c.GetFileRoute(fileId)+fmt.Sprintf("/thumbnail?download=%v", download), ""); err != nil {
+		return nil, BuildErrorResponse(r, err)
+	} else {
+		defer closeBody(r)
+
+		if data, err := ioutil.ReadAll(r.Body); err != nil {
+			return nil, BuildErrorResponse(r, NewAppError("DownloadFileThumbnail", "model.client.read_file.app_error", nil, err.Error(), r.StatusCode))
+		} else {
+			return data, BuildResponse(r)
+		}
 	}
 }
 
@@ -1750,6 +1904,8 @@ func (c *Client4) GetFileLink(fileId string) (string, *Response) {
 	if r, err := c.DoApiGet(c.GetFileRoute(fileId)+"/link", ""); err != nil {
 		return "", BuildErrorResponse(r, err)
 	} else {
+		defer closeBody(r)
+
 		return MapFromJson(r.Body)["link"], BuildResponse(r)
 	}
 }
@@ -1758,10 +1914,29 @@ func (c *Client4) GetFileLink(fileId string) (string, *Response) {
 func (c *Client4) GetFilePreview(fileId string) ([]byte, *Response) {
 	if r, err := c.DoApiGet(c.GetFileRoute(fileId)+"/preview", ""); err != nil {
 		return nil, BuildErrorResponse(r, err)
-	} else if data, err := ioutil.ReadAll(r.Body); err != nil {
-		return nil, &Response{StatusCode: r.StatusCode, Error: NewAppError("GetFilePreview", "model.client.read_file.app_error", nil, err.Error(), r.StatusCode)}
 	} else {
-		return data, BuildResponse(r)
+		defer closeBody(r)
+
+		if data, err := ioutil.ReadAll(r.Body); err != nil {
+			return nil, BuildErrorResponse(r, NewAppError("GetFilePreview", "model.client.read_file.app_error", nil, err.Error(), r.StatusCode))
+		} else {
+			return data, BuildResponse(r)
+		}
+	}
+}
+
+// DownloadFilePreview gets the bytes for a file by id.
+func (c *Client4) DownloadFilePreview(fileId string, download bool) ([]byte, *Response) {
+	if r, err := c.DoApiGet(c.GetFileRoute(fileId)+fmt.Sprintf("/preview?download=%v", download), ""); err != nil {
+		return nil, BuildErrorResponse(r, err)
+	} else {
+		defer closeBody(r)
+
+		if data, err := ioutil.ReadAll(r.Body); err != nil {
+			return nil, BuildErrorResponse(r, NewAppError("DownloadFilePreview", "model.client.read_file.app_error", nil, err.Error(), r.StatusCode))
+		} else {
+			return data, BuildResponse(r)
+		}
 	}
 }
 
@@ -1789,7 +1964,7 @@ func (c *Client4) GetFileInfosForPost(postId string, etag string) ([]*FileInfo, 
 
 // GetPing will return ok if the running goRoutines are below the threshold and unhealthy for above.
 func (c *Client4) GetPing() (string, *Response) {
-	if r, err := c.DoApiGet(c.GetSystemRoute()+"/ping", ""); r.StatusCode == 500 {
+	if r, err := c.DoApiGet(c.GetSystemRoute()+"/ping", ""); r != nil && r.StatusCode == 500 {
 		defer r.Body.Close()
 		return "unhealthy", BuildErrorResponse(r, err)
 	} else if err != nil {
@@ -1907,11 +2082,14 @@ func (c *Client4) UploadLicenseFile(data []byte) (bool, *Response) {
 
 	if rp, err := c.HttpClient.Do(rq); err != nil || rp == nil {
 		return false, &Response{StatusCode: http.StatusForbidden, Error: NewAppError(c.GetLicenseRoute(), "model.client.connecting.app_error", nil, err.Error(), http.StatusForbidden)}
-	} else if rp.StatusCode >= 300 {
-		return false, &Response{StatusCode: rp.StatusCode, Error: AppErrorFromJson(rp.Body)}
 	} else {
 		defer closeBody(rp)
-		return CheckStatusOK(rp), BuildResponse(rp)
+
+		if rp.StatusCode >= 300 {
+			return false, BuildErrorResponse(rp, AppErrorFromJson(rp.Body))
+		} else {
+			return CheckStatusOK(rp), BuildResponse(rp)
+		}
 	}
 }
 
@@ -2292,15 +2470,16 @@ func (c *Client4) DownloadComplianceReport(reportId string) ([]byte, *Response) 
 
 	if rp, err := c.HttpClient.Do(rq); err != nil || rp == nil {
 		return nil, &Response{Error: NewAppError("DownloadComplianceReport", "model.client.connecting.app_error", nil, err.Error(), http.StatusBadRequest)}
-	} else if rp.StatusCode >= 300 {
-		defer rp.Body.Close()
-		return nil, &Response{StatusCode: rp.StatusCode, Error: AppErrorFromJson(rp.Body)}
-	} else if data, err := ioutil.ReadAll(rp.Body); err != nil {
-		defer closeBody(rp)
-		return nil, &Response{StatusCode: rp.StatusCode, Error: NewAppError("DownloadComplianceReport", "model.client.read_file.app_error", nil, err.Error(), rp.StatusCode)}
 	} else {
 		defer closeBody(rp)
-		return data, BuildResponse(rp)
+
+		if rp.StatusCode >= 300 {
+			return nil, BuildErrorResponse(rp, AppErrorFromJson(rp.Body))
+		} else if data, err := ioutil.ReadAll(rp.Body); err != nil {
+			return nil, BuildErrorResponse(rp, NewAppError("DownloadComplianceReport", "model.client.read_file.app_error", nil, err.Error(), rp.StatusCode))
+		} else {
+			return data, BuildResponse(rp)
+		}
 	}
 }
 
@@ -2358,10 +2537,16 @@ func (c *Client4) GetAudits(page int, perPage int, etag string) (Audits, *Respon
 func (c *Client4) GetBrandImage() ([]byte, *Response) {
 	if r, err := c.DoApiGet(c.GetBrandRoute()+"/image", ""); err != nil {
 		return nil, BuildErrorResponse(r, err)
-	} else if data, err := ioutil.ReadAll(r.Body); err != nil {
-		return nil, &Response{StatusCode: r.StatusCode, Error: NewAppError("GetBrandImage", "model.client.read_file.app_error", nil, err.Error(), r.StatusCode)}
 	} else {
-		return data, BuildResponse(r)
+		defer closeBody(r)
+
+		if r.StatusCode >= 300 {
+			return nil, BuildErrorResponse(r, AppErrorFromJson(r.Body))
+		} else if data, err := ioutil.ReadAll(r.Body); err != nil {
+			return nil, BuildErrorResponse(r, NewAppError("GetBrandImage", "model.client.read_file.app_error", nil, err.Error(), r.StatusCode))
+		} else {
+			return data, BuildResponse(r)
+		}
 	}
 }
 
@@ -2390,11 +2575,14 @@ func (c *Client4) UploadBrandImage(data []byte) (bool, *Response) {
 
 	if rp, err := c.HttpClient.Do(rq); err != nil || rp == nil {
 		return false, &Response{StatusCode: http.StatusForbidden, Error: NewAppError(c.GetBrandRoute()+"/image", "model.client.connecting.app_error", nil, err.Error(), http.StatusForbidden)}
-	} else if rp.StatusCode >= 300 {
-		return false, &Response{StatusCode: rp.StatusCode, Error: AppErrorFromJson(rp.Body)}
 	} else {
 		defer closeBody(rp)
-		return CheckStatusOK(rp), BuildResponse(rp)
+
+		if rp.StatusCode >= 300 {
+			return false, BuildErrorResponse(rp, AppErrorFromJson(rp.Body))
+		} else {
+			return CheckStatusOK(rp), BuildResponse(rp)
+		}
 	}
 }
 
@@ -2523,6 +2711,16 @@ func (c *Client4) DeauthorizeOAuthApp(appId string) (bool, *Response) {
 // TestElasticsearch will attempt to connect to the configured Elasticsearch server and return OK if configured
 // correctly.
 func (c *Client4) TestElasticsearch() (bool, *Response) {
+	if r, err := c.DoApiPost(c.GetElasticsearchRoute()+"/test", ""); err != nil {
+		return false, BuildErrorResponse(r, err)
+	} else {
+		defer closeBody(r)
+		return CheckStatusOK(r), BuildResponse(r)
+	}
+}
+
+// PurgeElasticsearchIndexes immediately deletes all Elasticsearch indexes.
+func (c *Client4) PurgeElasticsearchIndexes() (bool, *Response) {
 	if r, err := c.DoApiPost(c.GetElasticsearchRoute()+"/test", ""); err != nil {
 		return false, BuildErrorResponse(r, err)
 	} else {
@@ -2677,9 +2875,10 @@ func (c *Client4) CreateEmoji(emoji *Emoji, image []byte, filename string) (*Emo
 	return c.DoEmojiUploadFile(c.GetEmojisRoute(), body.Bytes(), writer.FormDataContentType())
 }
 
-// GetEmojiList returns a list of custom emoji in the system.
-func (c *Client4) GetEmojiList() ([]*Emoji, *Response) {
-	if r, err := c.DoApiGet(c.GetEmojisRoute(), ""); err != nil {
+// GetEmojiList returns a page of custom emoji on the system.
+func (c *Client4) GetEmojiList(page, perPage int) ([]*Emoji, *Response) {
+	query := fmt.Sprintf("?page=%v&per_page=%v", page, perPage)
+	if r, err := c.DoApiGet(c.GetEmojisRoute()+query, ""); err != nil {
 		return nil, BuildErrorResponse(r, err)
 	} else {
 		defer closeBody(r)
@@ -2711,10 +2910,14 @@ func (c *Client4) GetEmoji(emojiId string) (*Emoji, *Response) {
 func (c *Client4) GetEmojiImage(emojiId string) ([]byte, *Response) {
 	if r, err := c.DoApiGet(c.GetEmojiRoute(emojiId)+"/image", ""); err != nil {
 		return nil, BuildErrorResponse(r, err)
-	} else if data, err := ioutil.ReadAll(r.Body); err != nil {
-		return nil, &Response{StatusCode: r.StatusCode, Error: NewAppError("GetEmojiImage", "model.client.read_file.app_error", nil, err.Error(), r.StatusCode)}
 	} else {
-		return data, BuildResponse(r)
+		defer closeBody(r)
+
+		if data, err := ioutil.ReadAll(r.Body); err != nil {
+			return nil, BuildErrorResponse(r, NewAppError("GetEmojiImage", "model.client.read_file.app_error", nil, err.Error(), r.StatusCode))
+		} else {
+			return data, BuildResponse(r)
+		}
 	}
 }
 
@@ -2767,22 +2970,52 @@ func (c *Client4) OpenGraph(url string) (map[string]string, *Response) {
 
 // Jobs Section
 
-// GetJobStatus gets the status of a single job.
-func (c *Client4) GetJobStatus(id string) (*JobStatus, *Response) {
-	if r, err := c.DoApiGet(c.GetJobsRoute()+fmt.Sprintf("/%v/status", id), ""); err != nil {
+// GetJob gets a single job.
+func (c *Client4) GetJob(id string) (*Job, *Response) {
+	if r, err := c.DoApiGet(c.GetJobsRoute()+fmt.Sprintf("/%v", id), ""); err != nil {
 		return nil, BuildErrorResponse(r, err)
 	} else {
 		defer closeBody(r)
-		return JobStatusFromJson(r.Body), BuildResponse(r)
+		return JobFromJson(r.Body), BuildResponse(r)
 	}
 }
 
-// GetJobStatusesByType gets the status of all jobs of a given type, sorted with the job that most recently started first.
-func (c *Client4) GetJobStatusesByType(jobType string, page int, perPage int) ([]*JobStatus, *Response) {
-	if r, err := c.DoApiGet(c.GetJobsRoute()+fmt.Sprintf("/type/%v/statuses?page=%v&per_page=%v", jobType, page, perPage), ""); err != nil {
+// Get all jobs, sorted with the job that was created most recently first.
+func (c *Client4) GetJobs(page int, perPage int) ([]*Job, *Response) {
+	if r, err := c.DoApiGet(c.GetJobsRoute()+fmt.Sprintf("?page=%v&per_page=%v", page, perPage), ""); err != nil {
 		return nil, BuildErrorResponse(r, err)
 	} else {
 		defer closeBody(r)
-		return JobStatusesFromJson(r.Body), BuildResponse(r)
+		return JobsFromJson(r.Body), BuildResponse(r)
+	}
+}
+
+// GetJobsByType gets all jobs of a given type, sorted with the job that was created most recently first.
+func (c *Client4) GetJobsByType(jobType string, page int, perPage int) ([]*Job, *Response) {
+	if r, err := c.DoApiGet(c.GetJobsRoute()+fmt.Sprintf("/type/%v?page=%v&per_page=%v", jobType, page, perPage), ""); err != nil {
+		return nil, BuildErrorResponse(r, err)
+	} else {
+		defer closeBody(r)
+		return JobsFromJson(r.Body), BuildResponse(r)
+	}
+}
+
+// CreateJob creates a job based on the provided job struct.
+func (c *Client4) CreateJob(job *Job) (*Job, *Response) {
+	if r, err := c.DoApiPost(c.GetJobsRoute(), job.ToJson()); err != nil {
+		return nil, BuildErrorResponse(r, err)
+	} else {
+		defer closeBody(r)
+		return JobFromJson(r.Body), BuildResponse(r)
+	}
+}
+
+// CancelJob requests the cancellation of the job with the provided Id.
+func (c *Client4) CancelJob(jobId string) (bool, *Response) {
+	if r, err := c.DoApiPost(c.GetJobsRoute()+fmt.Sprintf("/%v/cancel", jobId), ""); err != nil {
+		return false, BuildErrorResponse(r, err)
+	} else {
+		defer closeBody(r)
+		return CheckStatusOK(r), BuildResponse(r)
 	}
 }

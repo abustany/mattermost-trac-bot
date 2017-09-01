@@ -17,8 +17,8 @@
 		},
 		{
 			"ImportPath": "github.com/mattermost/platform/model",
-			"Comment": "v3.8.0-438-g31aeda363",
-			"Rev": "31aeda363cc7529c2fe93439d6b2ae67d4c2af29"
+			"Comment": "v4.1.0-92-g74b5e52c4",
+			"Rev": "74b5e52c4eb54000dcb5a7b46c0977d732bce80f"
 		},
 		{
 			"ImportPath": "github.com/nicksnyder/go-i18n/i18n",
@@ -75,6 +75,61 @@
 		{
 			"ImportPath": "gopkg.in/yaml.v2",
 			"Rev": "cd8b52f8269e0feb286dfeef29f8fe4d5b397e0b"
+		},
+		{
+			"ImportPath": "github.com/mattermost/platform/vendor/github.com/alecthomas/log4go",
+			"Comment": "v4.1.0-92-g74b5e52c4",
+			"Rev": "74b5e52c4eb54000dcb5a7b46c0977d732bce80f"
+		},
+		{
+			"ImportPath": "github.com/mattermost/platform/vendor/github.com/gorilla/websocket",
+			"Comment": "v4.1.0-92-g74b5e52c4",
+			"Rev": "74b5e52c4eb54000dcb5a7b46c0977d732bce80f"
+		},
+		{
+			"ImportPath": "github.com/mattermost/platform/vendor/github.com/nicksnyder/go-i18n/i18n",
+			"Comment": "v4.1.0-92-g74b5e52c4",
+			"Rev": "74b5e52c4eb54000dcb5a7b46c0977d732bce80f"
+		},
+		{
+			"ImportPath": "github.com/mattermost/platform/vendor/github.com/pborman/uuid",
+			"Comment": "v4.1.0-92-g74b5e52c4",
+			"Rev": "74b5e52c4eb54000dcb5a7b46c0977d732bce80f"
+		},
+		{
+			"ImportPath": "github.com/mattermost/platform/vendor/golang.org/x/crypto/bcrypt",
+			"Comment": "v4.1.0-92-g74b5e52c4",
+			"Rev": "74b5e52c4eb54000dcb5a7b46c0977d732bce80f"
+		},
+		{
+			"ImportPath": "github.com/mattermost/platform/vendor/github.com/nicksnyder/go-i18n/i18n/bundle",
+			"Comment": "v4.1.0-92-g74b5e52c4",
+			"Rev": "74b5e52c4eb54000dcb5a7b46c0977d732bce80f"
+		},
+		{
+			"ImportPath": "github.com/mattermost/platform/vendor/github.com/nicksnyder/go-i18n/i18n/language",
+			"Comment": "v4.1.0-92-g74b5e52c4",
+			"Rev": "74b5e52c4eb54000dcb5a7b46c0977d732bce80f"
+		},
+		{
+			"ImportPath": "github.com/mattermost/platform/vendor/github.com/nicksnyder/go-i18n/i18n/translation",
+			"Comment": "v4.1.0-92-g74b5e52c4",
+			"Rev": "74b5e52c4eb54000dcb5a7b46c0977d732bce80f"
+		},
+		{
+			"ImportPath": "github.com/mattermost/platform/vendor/golang.org/x/crypto/blowfish",
+			"Comment": "v4.1.0-92-g74b5e52c4",
+			"Rev": "74b5e52c4eb54000dcb5a7b46c0977d732bce80f"
+		},
+		{
+			"ImportPath": "github.com/mattermost/platform/vendor/github.com/pelletier/go-toml",
+			"Comment": "v4.1.0-92-g74b5e52c4",
+			"Rev": "74b5e52c4eb54000dcb5a7b46c0977d732bce80f"
+		},
+		{
+			"ImportPath": "github.com/mattermost/platform/vendor/gopkg.in/yaml.v2",
+			"Comment": "v4.1.0-92-g74b5e52c4",
+			"Rev": "74b5e52c4eb54000dcb5a7b46c0977d732bce80f"
 		}
 	]
 }

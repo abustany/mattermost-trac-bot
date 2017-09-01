@@ -5,8 +5,8 @@ package model
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
+	"io/ioutil"
 )
 
 const (
@@ -32,6 +32,22 @@ func (o *CommandResponse) ToJson() string {
 	}
 }
 
+func CommandResponseFromHTTPBody(contentType string, body io.Reader) *CommandResponse {
+	if contentType == "application/json" {
+		return CommandResponseFromJson(body)
+	}
+	if b, err := ioutil.ReadAll(body); err == nil {
+		return CommandResponseFromPlainText(string(b))
+	}
+	return nil
+}
+
+func CommandResponseFromPlainText(text string) *CommandResponse {
+	return &CommandResponse{
+		Text: text,
+	}
+}
+
 func CommandResponseFromJson(data io.Reader) *CommandResponse {
 	decoder := json.NewDecoder(data)
 	var o CommandResponse
@@ -40,14 +56,8 @@ func CommandResponseFromJson(data io.Reader) *CommandResponse {
 		return nil
 	}
 
-	// Ensure attachment fields are stored as strings
-	for _, attachment := range o.Attachments {
-		for _, field := range attachment.Fields {
-			if field.Value != nil {
-				field.Value = fmt.Sprintf("%v", field.Value)
-			}
-		}
-	}
+	o.Text = ExpandAnnouncement(o.Text)
+	o.Attachments = ProcessSlackAttachments(o.Attachments)
 
 	return &o
 }
