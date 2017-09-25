@@ -1,5 +1,7 @@
 # Mattermost Trac Bot
 
+[![Build Status](https://travis-ci.org/abustany/mattermost-trac-bot.svg?branch=master)](https://travis-ci.org/abustany/mattermost-trac-bot)
+
 The Mattermost Trac Bot connects to a Mattermost server, listens on some
 channels for ticket IDs, and replies to the messages with information about the
 tickets.
